@@ -1,26 +1,214 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Ink — deep slate-blue, near-black. Used sparingly (text/CTA), not as a fill color. */
+  --color-ink-50: #f2f4f6;
+  --color-ink-100: #dde2e7;
+  --color-ink-200: #b8c2cc;
+  --color-ink-300: #8fa0ac;
+  --color-ink-400: #647787;
+  --color-ink-500: #4a5b6a;
+  --color-ink-600: #384656;
+  --color-ink-700: #293544;
+  --color-ink-800: #1a2430;
+  --color-ink-900: #0f1b2b;
+  --color-ink-950: #090f18;
+
+  /* Paper — warm off-white, like a clinical notebook, never stark white. */
+  --color-paper-50: #faf9f6;
+  --color-paper-100: #f4f2ed;
+  --color-paper-200: #eae7de;
+  --color-paper-300: #dad5c8;
+  --color-paper-400: #b9b2a0;
+
+  /* Sage — confirmation / positive states. */
+  --color-sage-500: #5b7a63;
+  --color-sage-600: #46614d;
+  --color-sage-soft: #eef2ec;
+
+  /* Clay — attention, used sparingly, never as a loud "error red". */
+  --color-clay-500: #b5651d;
+  --color-clay-600: #954f14;
+  --color-clay-soft: #f8ede1;
+
+  --color-positive: var(--color-sage-600);
+  --color-positive-soft: var(--color-sage-soft);
+  --color-attention: var(--color-clay-600);
+  --color-attention-soft: var(--color-clay-soft);
+  --color-error: #a13a3a;
+  --color-error-soft: #f6ecec;
+
+  /* Legacy aliases kept during the visual rebuild so not every callsite needs
+     touching at once — new code should prefer the ink/paper scales directly. */
+  --color-navy-50: var(--color-ink-50);
+  --color-navy-100: var(--color-ink-100);
+  --color-navy-200: var(--color-ink-200);
+  --color-navy-300: var(--color-ink-300);
+  --color-navy-400: var(--color-ink-400);
+  --color-navy-500: var(--color-ink-500);
+  --color-navy-600: var(--color-ink-600);
+  --color-navy-700: var(--color-ink-700);
+  --color-navy-800: var(--color-ink-800);
+  --color-navy-900: var(--color-ink-900);
+  --color-navy-950: var(--color-ink-950);
+  --color-warm-50: var(--color-paper-50);
+  --color-warm-100: var(--color-paper-100);
+  --color-warm-200: var(--color-paper-200);
+  --color-warm-300: var(--color-paper-300);
+  --color-warm-400: var(--color-paper-400);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --background: #faf9f6;
+  --foreground: #0f1b2b;
+  --card: #ffffff;
+  --card-foreground: #0f1b2b;
+  --popover: #ffffff;
+  --popover-foreground: #0f1b2b;
+  --primary: #0f1b2b;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f2ed;
+  --secondary-foreground: #293544;
+  --muted: #f4f2ed;
+  --muted-foreground: #647787;
+  --accent: #f4f2ed;
+  --accent-foreground: #0f1b2b;
+  --destructive: #a13a3a;
+  --border: #eae7de;
+  --input: #eae7de;
+  --ring: #0f1b2b;
+  --chart-1: #0f1b2b;
+  --chart-2: #384656;
+  --chart-3: #4a5b6a;
+  --chart-4: #647787;
+  --chart-5: #8fa0ac;
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f1b2b;
+  --sidebar-primary: #0f1b2b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f2ed;
+  --sidebar-accent-foreground: #0f1b2b;
+  --sidebar-border: #eae7de;
+  --sidebar-ring: #0f1b2b;
+}
+
+.dark {
+  --background: #0b131e;
+  --foreground: #e7e9e4;
+  --card: #101925;
+  --card-foreground: #e7e9e4;
+  --popover: #101925;
+  --popover-foreground: #e7e9e4;
+  --primary: #e7e9e4;
+  --primary-foreground: #0b131e;
+  --secondary: #17212e;
+  --secondary-foreground: #c3c9ce;
+  --muted: #17212e;
+  --muted-foreground: #8fa0ac;
+  --accent: #17212e;
+  --accent-foreground: #e7e9e4;
+  --destructive: #c96a6a;
+  --border: #1c2735;
+  --input: #1c2735;
+  --ring: #8fa0ac;
+  --chart-1: #8fa0ac;
+  --chart-2: #647787;
+  --chart-3: #4a5b6a;
+  --chart-4: #384656;
+  --chart-5: #293544;
+  --sidebar: #0b131e;
+  --sidebar-foreground: #e7e9e4;
+  --sidebar-primary: #e7e9e4;
+  --sidebar-primary-foreground: #0b131e;
+  --sidebar-accent: #17212e;
+  --sidebar-accent-foreground: #e7e9e4;
+  --sidebar-border: #1c2735;
+  --sidebar-ring: #8fa0ac;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .transition-smooth {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .transition-spring {
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .hover-lift {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 27, 43, 0.06);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .font-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .glass {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
 }
