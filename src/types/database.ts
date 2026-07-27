@@ -46,6 +46,7 @@ export interface Database {
           treatment_duration_category: string | null
           primary_goal: string | null
           preferred_content_type: string | null
+          daily_water_goal_ml: number
           created_at: string
           updated_at: string
         }
@@ -56,6 +57,7 @@ export interface Database {
           treatment_duration_category?: string | null
           primary_goal?: string | null
           preferred_content_type?: string | null
+          daily_water_goal_ml?: number
           created_at?: string
           updated_at?: string
         }
@@ -66,6 +68,7 @@ export interface Database {
           treatment_duration_category?: string | null
           primary_goal?: string | null
           preferred_content_type?: string | null
+          daily_water_goal_ml?: number
           created_at?: string
           updated_at?: string
         }
@@ -767,6 +770,38 @@ export interface Database {
           provider?: string
           provider_customer_id?: string
           created_at?: string
+        }
+      }
+      reminder_preferences: {
+        Row: {
+          user_id: string
+          daily_log_enabled: boolean
+          hydration_enabled: boolean
+          new_content_enabled: boolean
+          recipe_updates_enabled: boolean
+          preferred_time: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          daily_log_enabled?: boolean
+          hydration_enabled?: boolean
+          new_content_enabled?: boolean
+          recipe_updates_enabled?: boolean
+          preferred_time?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          daily_log_enabled?: boolean
+          hydration_enabled?: boolean
+          new_content_enabled?: boolean
+          recipe_updates_enabled?: boolean
+          preferred_time?: string
+          created_at?: string
+          updated_at?: string
         }
       }
       shopping_lists: {

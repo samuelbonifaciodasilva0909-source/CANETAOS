@@ -1,29 +1,38 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { AppShell } from "@/components/layout/app-shell"
 import { PremiumCard } from "@/components/ui/premium-card"
 import { PremiumBadge } from "@/components/ui/premium-badge"
 import { HomeInteractive } from "@/components/home-interactive"
 import { WeightChart } from "@/components/weight-chart"
+import { ProgressRing } from "@/components/ui/progress-ring"
+import { getRecipeVisual } from "@/lib/content/recipe-visual"
+import { ErrorState } from "@/components/ui/error-state"
+import { WaterTracker } from "@/components/water-tracker"
+import { pickTipOfDay, type Tip } from "@/lib/content/tips"
+import { getPersonalizedContext } from "@/lib/personalization/context"
+import { getNextStepCTA, getTodayFocusActions } from "@/lib/personalization/next-step"
+import { getWeekSummary } from "@/lib/personalization/week-summary"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import {
-  ClipboardList,
   ArrowRight,
-  Clock,
   TrendingUp,
   Syringe,
-  Beef,
-  Flame,
   Target,
   BookOpen,
   UtensilsCrossed,
   ChevronRight,
   Droplets,
-  Moon,
   Zap,
+  Lightbulb,
+  Star,
+  Heart,
+  Smile,
+  Meh,
+  Frown,
 } from "lucide-react"
 
 interface UserProfile {
@@ -94,10 +103,28 @@ export default function AppPage() {
   const [mealPlans, setMealPlans] = useState<ContentItem[]>([])
   const [checklist, setChecklist] = useState<DailyChecklist | null>(null)
   const [streak, setStreak] = useState(0)
+  const [waterGoal, setWaterGoal] = useState(2000)
+  const [preferences, setPreferences] = useState<{ primary_goal: string | null; treatment_duration_category: string | null } | null>(null)
+  const [tip, setTip] = useState<Tip | null>(null)
+  const [contentViewedWeek, setContentViewedWeek] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
+    setError(null)
     const isDemo = document.cookie.includes("demo_auth=true")
+    const supabase = createClient()
+
+    async function loadTip(phase: string | null) {
+      const { data } = await supabase
+        .from("content_items")
+        .select("title, content, tags")
+        .eq("type", "tip")
+        .eq("is_published", true)
+      if (data) {
+        setTip(pickTipOfDay(data.map((t) => ({ title: t.title, content: t.content, tags: (t.tags as string[]) || [] })), phase))
+      }
+    }
 
     if (isDemo) {
       try {
@@ -111,53 +138,101 @@ export default function AppPage() {
         setMealPlans(demo.mealPlans)
         setChecklist(demo.checklist)
         setStreak(7)
+        setWaterGoal(demo.preferences?.daily_water_goal_ml || 2000)
+        setPreferences(demo.preferences || null)
+        setContentViewedWeek(2)
+        await loadTip(demo.preferences?.treatment_duration_category || null)
         setLoading(false)
         return
       } catch {}
     }
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setUserId(user.id)
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) console.error("Falha ao obter usuário:", userError.message)
+      if (!user) return
+      setUserId(user.id)
 
-    const [profRes, entriesRes, symptomsRes, recipesRes, articlesRes, mealsRes, checklistRes] = await Promise.all([
-      supabase.from("profiles").select("full_name, onboarding_completed, created_at").eq("id", user.id).single(),
-      supabase.from("tracker_entries").select("*").eq("user_id", user.id).order("entry_date", { ascending: false }).limit(30),
-      supabase.from("symptom_entries").select("entry_date, nausea, constipation, fatigue, headache").eq("user_id", user.id).order("entry_date", { ascending: false }).limit(14),
-      supabase.from("content_items").select("id, title, slug, description, type, is_premium, tags").eq("type", "recipe").eq("is_published", true).order("created_at", { ascending: false }).limit(4),
-      supabase.from("content_items").select("id, title, slug, description, type, is_premium, tags").eq("type", "educational").eq("is_published", true).order("created_at", { ascending: false }).limit(3),
-      supabase.from("content_items").select("id, title, slug, description, type, is_premium, tags").eq("type", "meal_plan").eq("is_published", true).order("created_at", { ascending: false }).limit(3),
-      supabase.from("daily_checklists").select("*").eq("user_id", user.id).eq("entry_date", new Date().toISOString().split("T")[0]).single(),
-    ])
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+      sevenDaysAgo.setHours(0, 0, 0, 0)
 
-    if (profRes.data) setProfile(profRes.data)
-    if (entriesRes.data) setEntries(entriesRes.data as TrackerEntry[])
-    if (symptomsRes.data) setSymptoms(symptomsRes.data as SymptomEntry[])
-    if (recipesRes.data) setRecipes(recipesRes.data as ContentItem[])
-    if (articlesRes.data) setArticles(articlesRes.data as ContentItem[])
-    if (mealsRes.data) setMealPlans(mealsRes.data as ContentItem[])
-    if (checklistRes.data) setChecklist(checklistRes.data as DailyChecklist)
+      const [profRes, entriesRes, symptomsRes, recipesRes, articlesRes, mealsRes, checklistRes, prefsRes, viewsRes] = await Promise.all([
+        supabase.from("profiles").select("full_name, onboarding_completed, created_at").eq("id", user.id).single(),
+        supabase.from("tracker_entries").select("*").eq("user_id", user.id).order("entry_date", { ascending: false }).limit(30),
+        supabase.from("symptom_entries").select("entry_date, nausea, constipation, fatigue, headache").eq("user_id", user.id).order("entry_date", { ascending: false }).limit(14),
+        supabase.from("content_items").select("id, title, slug, description, type, is_premium, tags").eq("type", "recipe").eq("is_published", true).order("created_at", { ascending: false }).limit(4),
+        supabase.from("content_items").select("id, title, slug, description, type, is_premium, tags").eq("type", "educational").eq("is_published", true).order("created_at", { ascending: false }).limit(3),
+        supabase.from("content_items").select("id, title, slug, description, type, is_premium, tags").eq("type", "meal_plan").eq("is_published", true).order("created_at", { ascending: false }).limit(3),
+        supabase.from("daily_checklists").select("*").eq("user_id", user.id).eq("entry_date", new Date().toISOString().split("T")[0]).single(),
+        supabase.from("user_preferences").select("daily_water_goal_ml, treatment_duration_category, primary_goal").eq("user_id", user.id).single(),
+        supabase.from("product_events").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("event_type", "content_viewed").gte("created_at", sevenDaysAgo.toISOString()),
+      ])
 
-    // Calculate streak
-    if (entriesRes.data && entriesRes.data.length > 0) {
-      let s = 0
-      const today = new Date()
-      for (let i = 0; i < 90; i++) {
-        const d = new Date(today)
-        d.setDate(d.getDate() - i)
-        const dateStr = d.toISOString().split("T")[0]
-        if (entriesRes.data.some((e: TrackerEntry) => e.entry_date === dateStr)) {
-          s++
-        } else break
+      if (profRes.data) setProfile(profRes.data)
+      if (entriesRes.data) setEntries(entriesRes.data as TrackerEntry[])
+      if (symptomsRes.data) setSymptoms(symptomsRes.data as SymptomEntry[])
+      if (recipesRes.data) setRecipes(recipesRes.data as ContentItem[])
+      if (articlesRes.data) setArticles(articlesRes.data as ContentItem[])
+      if (mealsRes.data) setMealPlans(mealsRes.data as ContentItem[])
+      if (checklistRes.data) setChecklist(checklistRes.data as DailyChecklist)
+      const prefs = prefsRes.data as { daily_water_goal_ml: number; treatment_duration_category: string | null; primary_goal: string | null } | null
+      setWaterGoal(prefs?.daily_water_goal_ml || 2000)
+      setPreferences(prefs)
+      setContentViewedWeek(viewsRes.count || 0)
+      await loadTip(prefs?.treatment_duration_category || null)
+
+      // Calculate streak
+      if (entriesRes.data && entriesRes.data.length > 0) {
+        let s = 0
+        const today = new Date()
+        for (let i = 0; i < 90; i++) {
+          const d = new Date(today)
+          d.setDate(d.getDate() - i)
+          const dateStr = d.toISOString().split("T")[0]
+          if (entriesRes.data.some((e: TrackerEntry) => e.entry_date === dateStr)) {
+            s++
+          } else break
+        }
+        setStreak(s)
       }
-      setStreak(s)
+    } catch (err) {
+      console.error("Falha ao carregar dados da home:", err)
+      setError("Não foi possível carregar sua Home agora.")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  const todayStr = new Date().toISOString().split("T")[0]
+  const isDemo = typeof document !== "undefined" && document.cookie.includes("demo_auth=true")
+
+  function handleWaterLogged(newTodayMl: number) {
+    setEntries((prev) => {
+      const idx = prev.findIndex((e) => e.entry_date === todayStr)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = { ...next[idx], water_intake_ml: newTodayMl }
+        return next
+      }
+      return [{ entry_date: todayStr, weight_kg: null, waist_measurement: null, protein_intake_g: null, water_intake_ml: newTodayMl, dose_applied: null, mood: null, energy_level: null }, ...prev]
+    })
+  }
+
+  const todayWaterMl = entries.find((e) => e.entry_date === todayStr)?.water_intake_ml || 0
+
+  const personalizedContext = useMemo(
+    () => getPersonalizedContext({ entries, symptoms, preferences }),
+    [entries, symptoms, preferences]
+  )
+  const nextStep = useMemo(() => getNextStepCTA(personalizedContext), [personalizedContext])
+  const focusActions = useMemo(() => getTodayFocusActions(personalizedContext), [personalizedContext])
+  const weekSummary = useMemo(
+    () => getWeekSummary({ entries, symptoms, trainingRegisteredThisWeek: false, contentViewed: contentViewedWeek }),
+    [entries, symptoms, contentViewedWeek]
+  )
 
   const firstName = profile?.full_name?.split(" ")[0] || "você"
   const weekNumber = profile ? getWeekNumber(profile.created_at) : 1
@@ -178,6 +253,28 @@ export default function AppPage() {
   const completedChecks = checklist
     ? [checklist.water, checklist.protein, checklist.training, checklist.application, checklist.tracking, checklist.sleep, checklist.movement].filter(Boolean).length
     : 0
+
+  // Resumo de hoje — stat rings
+  const waterPct = Math.min(100, Math.round((todayWaterMl / waterGoal) * 100))
+  const checklistPct = Math.round((completedChecks / 7) * 100)
+  const streakPct = Math.min(100, Math.round((streak / 7) * 100))
+  const symptomCount = todaySymptoms
+    ? [todaySymptoms.nausea, todaySymptoms.constipation, todaySymptoms.fatigue, todaySymptoms.headache].filter(Boolean).length
+    : 0
+  const wellnessPct = todaySymptoms ? Math.max(0, 100 - symptomCount * 25) : 100
+  const moodLabel = !todaySymptoms ? "Sem registro" : symptomCount === 0 ? "Leve" : symptomCount <= 2 ? "Moderado" : "Intenso"
+  const MoodIcon = !todaySymptoms || symptomCount === 0 ? Smile : symptomCount <= 2 ? Meh : Frown
+
+  const hasWeightChart = entries.length >= 2 && entries.some((e) => e.weight_kg != null)
+  const suggestion = contextualRecipes[0] || mealPlans[0]
+
+  if (error) {
+    return (
+      <AppShell>
+        <ErrorState message={error} onRetry={() => { setLoading(true); loadData() }} />
+      </AppShell>
+    )
+  }
 
   if (loading) {
     return (
@@ -206,35 +303,95 @@ export default function AppPage() {
           </p>
         </div>
 
-        {/* Streak + Weekly completion */}
-        <div className="grid grid-cols-2 gap-3">
-          <PremiumCard variant="elevated" padding="lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Flame className="h-4 w-4 text-attention" strokeWidth={1.5} />
-              <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-navy-400">Sequência</span>
+        {/* Hero — Seu foco de hoje, driven by getPersonalizedContext */}
+        <Link href={nextStep.href} className="block group">
+          <div className="relative overflow-hidden rounded-3xl bg-aurora p-6 sm:p-8 text-white shadow-aurora transition-smooth group-hover:brightness-[1.08]">
+            <div className="relative z-10 max-w-md">
+              <div className="flex items-center gap-1.5 mb-3 text-[12px] font-medium text-white/80">
+                <Star className="h-3.5 w-3.5" strokeWidth={0} fill="currentColor" />
+                Seu foco de hoje
+              </div>
+              <p className="text-[22px] sm:text-[26px] font-semibold tracking-[-0.02em] leading-snug mb-2">
+                {nextStep.label}
+              </p>
+              <p className="text-[13px] text-white/75 leading-relaxed">
+                Cada passo importa. Você está indo muito bem!
+              </p>
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-[28px] font-bold text-foreground tracking-tight">{streak}</span>
-              <span className="text-[12px] text-navy-400">dias</span>
-            </div>
-          </PremiumCard>
+            <Target className="pointer-events-none absolute -right-6 -bottom-8 h-36 w-36 text-white/10 sm:h-44 sm:w-44" strokeWidth={1} />
+            <Target className="pointer-events-none absolute right-8 top-1/2 hidden -translate-y-1/2 h-16 w-16 text-white/20 sm:block" strokeWidth={1.2} />
+          </div>
+        </Link>
 
-          <PremiumCard variant="elevated" padding="lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="h-4 w-4 text-positive" strokeWidth={1.5} />
-              <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-navy-400">Hoje</span>
+        {/* Today's focus — max 3 contextual actions, no medical tasking */}
+        {focusActions.length > 0 && (
+          <div>
+            <h2 className="text-[13px] font-medium uppercase tracking-[0.06em] text-navy-400 mb-3">
+              Próximas ações
+            </h2>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {focusActions.map((action) => (
+                <Link key={action.key} href={action.href}>
+                  <PremiumCard variant="interactive" padding="md" className="h-full flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium text-foreground">{action.label}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-navy-300 shrink-0" strokeWidth={1.5} />
+                  </PremiumCard>
+                </Link>
+              ))}
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-[28px] font-bold text-foreground tracking-tight">{completedChecks}</span>
-              <span className="text-[12px] text-navy-400">/ 7</span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-warm-200 dark:bg-navy-700 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-positive transition-all duration-500"
-                style={{ width: `${(completedChecks / 7) * 100}%` }}
-              />
-            </div>
-          </PremiumCard>
+          </div>
+        )}
+
+        {/* Resumo de hoje — stat rings */}
+        <div>
+          <h2 className="text-[13px] font-medium uppercase tracking-[0.06em] text-navy-400 mb-3">
+            Resumo de hoje
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <PremiumCard variant="elevated" padding="md">
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-navy-400">Água</span>
+                <ProgressRing pct={waterPct} size={40} strokeWidth={3.5} colorClassName="stroke-sky-500">
+                  <span className="text-[9px] font-bold font-numeric text-sky-500">{waterPct}%</span>
+                </ProgressRing>
+              </div>
+              <p className="text-[18px] font-bold font-numeric text-foreground">{(todayWaterMl / 1000).toFixed(1)} L</p>
+              <p className="text-[11px] text-navy-400">Meta: {(waterGoal / 1000).toFixed(1)} L</p>
+            </PremiumCard>
+
+            <PremiumCard variant="elevated" padding="md">
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-navy-400">Rotina</span>
+                <ProgressRing pct={checklistPct} size={40} strokeWidth={3.5} colorClassName="stroke-emerald-500">
+                  <UtensilsCrossed className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2} />
+                </ProgressRing>
+              </div>
+              <p className="text-[18px] font-bold font-numeric text-foreground">{completedChecks} / 7</p>
+              <p className="text-[11px] text-navy-400">Hábitos hoje</p>
+            </PremiumCard>
+
+            <PremiumCard variant="elevated" padding="md">
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-navy-400">Sintomas</span>
+                <ProgressRing pct={wellnessPct} size={40} strokeWidth={3.5} colorClassName="stroke-amber-500">
+                  <MoodIcon className="h-3.5 w-3.5 text-amber-500" strokeWidth={2} />
+                </ProgressRing>
+              </div>
+              <p className="text-[18px] font-bold text-foreground">{moodLabel}</p>
+              <p className="text-[11px] text-navy-400">Como se sente</p>
+            </PremiumCard>
+
+            <PremiumCard variant="elevated" padding="md">
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-navy-400">Sequência</span>
+                <ProgressRing pct={streakPct} size={40} strokeWidth={3.5} colorClassName="stroke-violet-500">
+                  <span className="text-[9px] font-bold font-numeric text-violet-500">{streakPct}%</span>
+                </ProgressRing>
+              </div>
+              <p className="text-[18px] font-bold font-numeric text-foreground">{streak}</p>
+              <p className="text-[11px] text-navy-400">dias seguidos</p>
+            </PremiumCard>
+          </div>
         </div>
 
         {/* Next application reminder */}
@@ -252,49 +409,94 @@ export default function AppPage() {
           </PremiumCard>
         )}
 
-        {/* Weight chart */}
-        {entries.length >= 2 && entries.some((e) => e.weight_kg != null) && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[13px] font-medium uppercase tracking-[0.06em] text-navy-400">
-                Evolução do peso
-              </h2>
-              <Link href="/app/tracker" className="text-[12px] font-medium text-navy-500 hover:text-navy-700 flex items-center gap-1 transition-smooth">
-                Ver tudo <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
-            <PremiumCard variant="elevated" padding="lg">
-              <WeightChart entries={entries} />
-            </PremiumCard>
+        {/* Evolução + próxima refeição sugerida */}
+        {(hasWeightChart || suggestion) && (
+          <div className="grid gap-4 lg:grid-cols-5">
+            {hasWeightChart && (
+              <div className={cn(suggestion ? "lg:col-span-3" : "lg:col-span-5")}>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[13px] font-medium uppercase tracking-[0.06em] text-navy-400">
+                    Evolução do peso
+                  </h2>
+                  <Link href="/app/tracker" className="text-[12px] font-medium text-navy-500 hover:text-navy-700 flex items-center gap-1 transition-smooth">
+                    Ver tudo <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <PremiumCard variant="elevated" padding="lg" className="h-[calc(100%-2rem)]">
+                  <WeightChart entries={entries} />
+                </PremiumCard>
+              </div>
+            )}
+
+            {suggestion && (
+              <div className={cn(hasWeightChart ? "lg:col-span-2" : "lg:col-span-5")}>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[13px] font-medium uppercase tracking-[0.06em] text-navy-400">
+                    Próxima refeição sugerida
+                  </h2>
+                </div>
+                <Link href={`/app/${contextualRecipes[0] ? "recipes" : "food"}/${suggestion.slug}`}>
+                  {(() => {
+                    const visual = getRecipeVisual(suggestion.title, suggestion.tags || [])
+                    return (
+                      <PremiumCard variant="interactive" padding="none" className="overflow-hidden h-full">
+                        <div className={`h-28 bg-gradient-to-br ${visual.gradient} dark:from-navy-800 dark:to-navy-700 flex items-center justify-center`}>
+                          <visual.icon className={`h-8 w-8 ${visual.iconClass} dark:text-navy-500`} strokeWidth={1} />
+                        </div>
+                        <div className="p-4">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <h3 className="text-[13px] font-medium text-foreground line-clamp-1">{suggestion.title}</h3>
+                            {suggestion.is_premium && <PremiumBadge variant="default" className="text-[9px]">Plus</PremiumBadge>}
+                          </div>
+                          {suggestion.tags && suggestion.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {suggestion.tags.slice(0, 3).map((t) => (
+                                <span key={t} className="rounded-md bg-warm-100 dark:bg-navy-800 px-1.5 py-0.5 text-[10px] text-navy-500 dark:text-navy-400">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <p className="text-[12px] text-navy-500 line-clamp-2 leading-relaxed mb-2">{suggestion.description}</p>
+                          <span className="text-[12px] font-medium text-violet-600 dark:text-violet-400 flex items-center gap-1">
+                            Ver receita completa <ChevronRight className="h-3 w-3" />
+                          </span>
+                        </div>
+                      </PremiumCard>
+                    )
+                  })()}
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Quick stats row */}
-        {latestEntry && (
-          <div className="grid grid-cols-3 gap-3">
-            {latestEntry.weight_kg && (
-              <div className="rounded-xl bg-card border border-border/50 p-4 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-navy-400 mb-1">Peso</p>
-                <p className="text-[18px] font-bold text-foreground">{latestEntry.weight_kg}</p>
-                <p className="text-[10px] text-navy-400">kg</p>
+        {/* Tip of the day */}
+        {tip && (
+          <PremiumCard variant="soft" padding="lg" className="border border-border/40">
+            <div className="flex items-start gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-navy-50 shrink-0">
+                <Lightbulb className="h-4 w-4 text-navy-600" strokeWidth={1.5} />
               </div>
-            )}
-            {latestEntry.protein_intake_g && (
-              <div className="rounded-xl bg-card border border-border/50 p-4 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-navy-400 mb-1">Proteína</p>
-                <p className="text-[18px] font-bold text-foreground">{latestEntry.protein_intake_g}</p>
-                <p className="text-[10px] text-navy-400">g</p>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-navy-400 mb-1">
+                  Dica do dia
+                </p>
+                <p className="text-[13px] font-medium text-foreground mb-1">{tip.title}</p>
+                <p className="text-[13px] text-navy-500 leading-relaxed">{tip.content}</p>
               </div>
-            )}
-            {latestEntry.water_intake_ml && (
-              <div className="rounded-xl bg-card border border-border/50 p-4 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-navy-400 mb-1">Água</p>
-                <p className="text-[18px] font-bold text-foreground">{(latestEntry.water_intake_ml / 1000).toFixed(1)}</p>
-                <p className="text-[10px] text-navy-400">L</p>
-              </div>
-            )}
-          </div>
+            </div>
+          </PremiumCard>
         )}
+
+        {/* Hydration */}
+        <WaterTracker
+          entries={entries}
+          goalMl={waterGoal}
+          todayMl={todayWaterMl}
+          isDemo={isDemo}
+          onLogged={handleWaterLogged}
+        />
 
         {/* Mood + Daily checklist */}
         <HomeInteractive />
@@ -333,11 +535,13 @@ export default function AppPage() {
               </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              {contextualRecipes.map((recipe) => (
+              {contextualRecipes.map((recipe) => {
+                const visual = getRecipeVisual(recipe.title, recipe.tags || [])
+                return (
                 <Link key={recipe.id} href={`/app/recipes/${recipe.slug}`}>
                   <PremiumCard variant="interactive" padding="none" className="overflow-hidden h-full">
-                    <div className="h-28 bg-gradient-to-br from-navy-50 to-warm-100 dark:from-navy-800 dark:to-navy-700 flex items-center justify-center">
-                      <UtensilsCrossed className="h-7 w-7 text-navy-300 dark:text-navy-500" strokeWidth={1} />
+                    <div className={`h-28 bg-gradient-to-br ${visual.gradient} dark:from-navy-800 dark:to-navy-700 flex items-center justify-center`}>
+                      <visual.icon className={`h-7 w-7 ${visual.iconClass} dark:text-navy-500`} strokeWidth={1} />
                     </div>
                     <div className="p-4">
                       <div className="flex items-center gap-2 mb-1.5">
@@ -348,7 +552,8 @@ export default function AppPage() {
                     </div>
                   </PremiumCard>
                 </Link>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -423,40 +628,47 @@ export default function AppPage() {
           </div>
         )}
 
+        {/* Minha Semana — compact summary, full breakdown at /app/semana */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[13px] font-medium uppercase tracking-[0.06em] text-navy-400">
+              Minha semana
+            </h2>
+            <Link href="/app/semana" className="text-[12px] font-medium text-navy-500 hover:text-navy-700 flex items-center gap-1 transition-smooth">
+              Ver mais <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <PremiumCard variant="elevated" padding="lg">
+            <p className="text-[13px] text-navy-700 leading-relaxed">{weekSummary.observations[0]}</p>
+            {weekSummary.observations.length > 1 && (
+              <p className="text-[13px] text-navy-500 leading-relaxed mt-1">{weekSummary.observations[1]}</p>
+            )}
+          </PremiumCard>
+        </div>
+
         {/* Quick actions */}
         <div>
           <h2 className="text-[15px] font-semibold text-foreground mb-4 tracking-[-0.01em]">
-            Acesso rápido
+            Atalhos rápidos
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Link href="/app/tracker" className="group">
-              <PremiumCard variant="interactive" padding="lg" className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-50 dark:bg-navy-800">
-                    <ClipboardList className="h-5 w-5 text-navy-600 dark:text-navy-300" strokeWidth={1.5} />
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {[
+              { href: "/app/tracker", icon: Smile, label: "Como me sinto" },
+              { href: "/app/food", icon: UtensilsCrossed, label: "Refeição" },
+              { href: "/app/tracker", icon: Droplets, label: "Água" },
+              { href: "/app/learning", icon: BookOpen, label: "Conteúdos" },
+              { href: "/app/semana", icon: TrendingUp, label: "Evolução" },
+              { href: "/app/colecao", icon: Heart, label: "Favoritas" },
+            ].map((action) => (
+              <Link key={action.label} href={action.href} className="group">
+                <PremiumCard variant="interactive" padding="sm" className="flex flex-col items-center gap-2 text-center h-full">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 dark:bg-violet-500/15 group-hover:bg-violet-500/15 dark:group-hover:bg-violet-500/20 transition-smooth">
+                    <action.icon className="h-[18px] w-[18px] text-violet-600 dark:text-violet-300" strokeWidth={1.5} />
                   </div>
-                  <div>
-                    <p className="text-[13px] font-medium text-foreground">Registrar acompanhamento</p>
-                    <p className="text-[12px] text-navy-400 mt-0.5">Peso, medidas e observações</p>
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-navy-300 transition-smooth group-hover:text-navy-600 group-hover:translate-x-0.5" />
-              </PremiumCard>
-            </Link>
-            <Link href="/app/recipes" className="group">
-              <PremiumCard variant="interactive" padding="lg" className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-50 dark:bg-navy-800">
-                    <Clock className="h-5 w-5 text-navy-600 dark:text-navy-300" strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-medium text-foreground">Explorar receitas</p>
-                    <p className="text-[12px] text-navy-400 mt-0.5">Opções nutritivas e práticas</p>
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-navy-300 transition-smooth group-hover:text-navy-600 group-hover:translate-x-0.5" />
-              </PremiumCard>
-            </Link>
+                  <span className="text-[11px] font-medium text-foreground leading-tight">{action.label}</span>
+                </PremiumCard>
+              </Link>
+            ))}
           </div>
         </div>
       </div>

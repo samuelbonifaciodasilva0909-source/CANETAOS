@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import { PremiumCard } from "@/components/ui/premium-card"
 import { PremiumBadge } from "@/components/ui/premium-badge"
 import { PremiumButton } from "@/components/ui/premium-button"
@@ -77,9 +78,9 @@ export default async function BillingPage() {
 
           <div className="mt-6 border-t border-border/40 pt-6">
             {!isPlus ? (
-              <a href="/checkout" className="inline-flex h-11 items-center justify-center rounded-xl bg-navy-900 px-6 text-[13px] font-medium text-white transition-smooth hover:bg-navy-800">
+              <Link href="/checkout/plus_subscription" className="inline-flex h-11 items-center justify-center rounded-xl bg-navy-900 px-6 text-[13px] font-medium text-white transition-smooth hover:bg-navy-800">
                 Assinar Plus
-              </a>
+              </Link>
             ) : (
               <div className="flex gap-3">
                 <PremiumButton variant="outline" size="md">

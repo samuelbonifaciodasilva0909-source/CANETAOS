@@ -68,4 +68,36 @@ export function hasAnyEntitlement(
   return required.some((r) => activeEntitlements.includes(r))
 }
 
+/**
+ * Server-side helper: fetches everything computeEntitlements needs for a
+ * given user and returns the resolved entitlement list. Demo mode's
+ * `createClient()` shim has no products/purchases/unlock_events fixtures, so
+ * every real user's fetch would come back empty and get gated out — callers
+ * must skip this for demo sessions (see isDemoMode in supabase/middleware.ts).
+ */
+export async function getUserEntitlements(
+  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  userId: string
+): Promise<EntitlementSlug[]> {
+  const [productsRes, purchasesRes, subRes, unlocksRes] = await Promise.all([
+    supabase.from("products").select("*"),
+    supabase.from("purchases").select("*").eq("user_id", userId),
+    supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("unlock_events").select("*").eq("user_id", userId),
+  ])
+
+  return computeEntitlements({
+    purchases: purchasesRes.data || [],
+    subscription: subRes.data || null,
+    unlockEvents: unlocksRes.data || [],
+    products: productsRes.data || [],
+  })
+}
+
 export { getDesmameUnlockStatus, DESMAME_UNLOCK_WEEKS } from "./unlock"

@@ -46,4 +46,15 @@ export interface WebhookEvent {
   providerSubscriptionId?: string
   status: "paid" | "pending" | "failed" | "refunded" | "canceled"
   raw: Record<string, unknown>
+  /**
+   * Set by providers where the buyer may not have an existing CanetaOS
+   * account yet (e.g. Cakto payment links sold outside the app) — the
+   * webhook handler uses these to find-or-create the user and product
+   * instead of relying on a purchase row created at checkout time.
+   */
+  customerEmail?: string
+  customerName?: string
+  /** The provider's own product/offer id, resolved by the webhook handler
+   * against a configured mapping to one of our internal ProductSlugs. */
+  externalProductId?: string
 }

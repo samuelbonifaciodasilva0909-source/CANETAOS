@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client"
 import { AppShell } from "@/components/layout/app-shell"
 import { PremiumCard } from "@/components/ui/premium-card"
 import { PremiumButton } from "@/components/ui/premium-button"
-import { User, Shield, CreditCard, Check, X } from "lucide-react"
+import { User, Shield, CreditCard, Check, X, Bell } from "lucide-react"
+import { ErrorState } from "@/components/ui/error-state"
 import { cn } from "@/lib/utils"
 import { MEDICATION_LABELS, TREATMENT_DURATION_LABELS, PRIMARY_GOAL_LABELS } from "@/types"
 
@@ -20,6 +21,24 @@ interface Preferences {
   treatment_duration_category: string | null
   primary_goal: string | null
 }
+
+interface Reminders {
+  daily_log_enabled: boolean
+  hydration_enabled: boolean
+  new_content_enabled: boolean
+  recipe_updates_enabled: boolean
+  preferred_time: string
+}
+
+const DEFAULT_REMINDERS: Reminders = {
+  daily_log_enabled: true,
+  hydration_enabled: true,
+  new_content_enabled: false,
+  recipe_updates_enabled: false,
+  preferred_time: "19:00",
+}
+
+const TIME_OPTIONS = ["08:00", "09:00", "12:00", "18:00", "19:00", "20:00", "21:00"]
 
 const medications = Object.entries(MEDICATION_LABELS).map(([value, label]) => ({ value, label }))
 const durations = Object.entries(TREATMENT_DURATION_LABELS).map(([value, label]) => ({ value, label }))
@@ -99,11 +118,37 @@ function InlineSelect({ label, value, options, onSave }: { label: string; value:
   )
 }
 
+function ToggleRow({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0">
+      <span className="text-[13px] text-navy-700 dark:text-navy-300">{label}</span>
+      <button
+        onClick={() => onToggle(!checked)}
+        role="switch"
+        aria-checked={checked}
+        className={cn(
+          "relative h-6 w-11 shrink-0 rounded-full transition-smooth",
+          checked ? "bg-navy-900" : "bg-warm-300 dark:bg-navy-700"
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+            checked ? "translate-x-[22px]" : "translate-x-0.5"
+          )}
+        />
+      </button>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [preferences, setPreferences] = useState<Preferences | null>(null)
+  const [reminders, setReminders] = useState<Reminders>(DEFAULT_REMINDERS)
   const [userId, setUserId] = useState("")
   const [loading, setLoading] = useState(true)
+  const [pageError, setPageError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   const showToast = useCallback((msg: string) => {
@@ -112,28 +157,64 @@ export default function SettingsPage() {
   }, [])
 
   const loadData = useCallback(async () => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setUserId(user.id)
+    setPageError(null)
+    const isDemo = document.cookie.includes("demo_auth=true")
 
-    const [profRes, prefRes] = await Promise.all([
-      supabase.from("profiles").select("full_name, age_confirmed").eq("id", user.id).single(),
-      supabase.from("user_preferences").select("medication_name, treatment_duration_category, primary_goal").eq("user_id", user.id).single(),
-    ])
+    if (isDemo) {
+      try {
+        const res = await fetch("/api/demo/data")
+        const demo = await res.json()
+        setUserId("demo-user-id")
+        setProfile({
+          full_name: demo.profile?.full_name || null,
+          age_confirmed: demo.profile?.age_confirmed || false,
+          email: "demo@canetaos.com",
+        })
+        setPreferences(demo.preferences || null)
+        setReminders(DEFAULT_REMINDERS)
+        setLoading(false)
+        return
+      } catch (err) {
+        console.error("Falha ao carregar configurações demo:", err)
+      }
+    }
 
-    setProfile({
-      full_name: (profRes.data as { full_name: string | null })?.full_name || null,
-      age_confirmed: (profRes.data as { age_confirmed: boolean })?.age_confirmed || false,
-      email: user.email || "",
-    })
-    setPreferences(prefRes.data as Preferences | null)
-    setLoading(false)
+    try {
+      const supabase = createClient()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) console.error("Falha ao obter usuário:", userError.message)
+      if (!user) return
+      setUserId(user.id)
+
+      const [profRes, prefRes, remindersRes] = await Promise.all([
+        supabase.from("profiles").select("full_name, age_confirmed").eq("id", user.id).single(),
+        supabase.from("user_preferences").select("medication_name, treatment_duration_category, primary_goal").eq("user_id", user.id).single(),
+        supabase.from("reminder_preferences").select("*").eq("user_id", user.id).maybeSingle(),
+      ])
+
+      setProfile({
+        full_name: (profRes.data as { full_name: string | null })?.full_name || null,
+        age_confirmed: (profRes.data as { age_confirmed: boolean })?.age_confirmed || false,
+        email: user.email || "",
+      })
+      setPreferences(prefRes.data as Preferences | null)
+      setReminders((remindersRes.data as Reminders | null) || DEFAULT_REMINDERS)
+    } catch (err) {
+      console.error("Falha ao carregar configurações:", err)
+      setPageError("Não foi possível carregar suas configurações agora.")
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
   async function updateProfile(field: string, value: string) {
+    if (document.cookie.includes("demo_auth=true")) {
+      setProfile((prev) => prev ? { ...prev, [field]: value } : prev)
+      showToast("Perfil atualizado (demo, não é salvo)")
+      return
+    }
     const supabase = createClient()
     const { error } = await supabase.from("profiles").update({ [field]: value }).eq("id", userId)
     if (!error) {
@@ -143,12 +224,41 @@ export default function SettingsPage() {
   }
 
   async function updatePreference(field: string, value: string) {
+    if (document.cookie.includes("demo_auth=true")) {
+      setPreferences((prev) => prev ? { ...prev, [field]: value } : prev)
+      showToast("Preferência atualizada (demo, não é salva)")
+      return
+    }
     const supabase = createClient()
     const { error } = await supabase.from("user_preferences").update({ [field]: value }).eq("user_id", userId)
     if (!error) {
       setPreferences((prev) => prev ? { ...prev, [field]: value } : prev)
       showToast("Preferência atualizada")
     }
+  }
+
+  async function updateReminder<K extends keyof Reminders>(field: K, value: Reminders[K]) {
+    setReminders((prev) => ({ ...prev, [field]: value }))
+
+    if (document.cookie.includes("demo_auth=true")) {
+      showToast("Lembrete atualizado (demo, não é salvo)")
+      return
+    }
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("reminder_preferences")
+      .upsert({ user_id: userId, ...reminders, [field]: value }, { onConflict: "user_id" })
+    if (!error) {
+      showToast("Lembrete atualizado")
+    }
+  }
+
+  if (pageError) {
+    return (
+      <AppShell>
+        <ErrorState message={pageError} onRetry={() => { setLoading(true); loadData() }} />
+      </AppShell>
+    )
   }
 
   if (loading) {
@@ -213,6 +323,30 @@ export default function SettingsPage() {
             <InlineSelect label="Duração" value={preferences?.treatment_duration_category ?? null} options={durations} onSave={(v) => updatePreference("treatment_duration_category", v)} />
             <InlineSelect label="Dor principal" value={preferences?.primary_goal ?? null} options={goals} onSave={(v) => updatePreference("primary_goal", v)} />
           </div>
+        </PremiumCard>
+
+        <PremiumCard variant="elevated" padding="lg">
+          <div className="flex items-center gap-3 mb-5">
+            <Bell className="h-4 w-4 text-navy-400" strokeWidth={1.5} />
+            <h3 className="text-[13px] font-medium text-foreground">
+              Lembretes
+            </h3>
+          </div>
+          <div className="space-y-0">
+            <ToggleRow label="Lembrete de registro diário" checked={reminders.daily_log_enabled} onToggle={(v) => updateReminder("daily_log_enabled", v)} />
+            <ToggleRow label="Lembrete de hidratação" checked={reminders.hydration_enabled} onToggle={(v) => updateReminder("hydration_enabled", v)} />
+            <ToggleRow label="Novo conteúdo disponível" checked={reminders.new_content_enabled} onToggle={(v) => updateReminder("new_content_enabled", v)} />
+            <ToggleRow label="Atualização de receitas" checked={reminders.recipe_updates_enabled} onToggle={(v) => updateReminder("recipe_updates_enabled", v)} />
+            <InlineSelect
+              label="Horário preferido"
+              value={reminders.preferred_time}
+              options={TIME_OPTIONS.map((t) => ({ value: t, label: t }))}
+              onSave={(v) => updateReminder("preferred_time", v)}
+            />
+          </div>
+          <p className="mt-4 text-[11px] text-navy-400 leading-relaxed">
+            Os lembretes ainda não enviam notificações push — isso é a base pra quando essa função estiver disponível.
+          </p>
         </PremiumCard>
 
         <PremiumCard variant="elevated" padding="lg">

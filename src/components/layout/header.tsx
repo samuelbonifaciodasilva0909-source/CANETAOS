@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
+import { createClient } from "@/lib/supabase/client"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -11,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { User, Settings, CreditCard, LogOut, Sun, Moon, Monitor } from "lucide-react"
+import { User, Settings, CreditCard, LogOut, Sun, Moon, Monitor, Bell } from "lucide-react"
 import { PremiumBadge } from "@/components/ui/premium-badge"
 import { GlobalSearch } from "@/components/global-search"
 
@@ -19,6 +20,7 @@ export function Header() {
   const [userName, setUserName] = useState("")
   const [userEmail, setUserEmail] = useState("")
   const [mounted, setMounted] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const { theme, setTheme } = useTheme()
   const router = useRouter()
 
@@ -39,6 +41,24 @@ export function Header() {
       }
     }
     getUser()
+  }, [])
+
+  useEffect(() => {
+    async function getUnreadCount() {
+      if (document.cookie.includes("demo_auth=true")) return
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { count } = await supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("read", false)
+        setUnreadCount(count || 0)
+      } catch {}
+    }
+    getUnreadCount()
   }, [])
 
   async function handleSignOut() {
@@ -70,10 +90,23 @@ export function Header() {
           Starter
         </PremiumBadge>
 
+        <button
+          onClick={() => router.push("/app/settings")}
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-navy-400 hover:bg-warm-100 dark:hover:bg-white/[0.06] hover:text-navy-700 dark:hover:text-navy-200 transition-smooth"
+          title="Notificações"
+        >
+          <Bell className="h-4 w-4" strokeWidth={1.5} />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 text-[9px] font-semibold text-white">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+
         {mounted && (
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "dark" : "system")}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-navy-400 hover:bg-warm-100 hover:text-navy-700 transition-smooth"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-navy-400 hover:bg-warm-100 dark:hover:bg-white/[0.06] hover:text-navy-700 dark:hover:text-navy-200 transition-smooth"
             title={`Tema atual: ${theme}`}
           >
             {theme === "dark" ? (

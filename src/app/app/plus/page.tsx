@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { AppShell } from "@/components/layout/app-shell"
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import { PremiumCard } from "@/components/ui/premium-card"
 import { PremiumBadge } from "@/components/ui/premium-badge"
 import { PremiumButton } from "@/components/ui/premium-button"
@@ -77,12 +78,14 @@ export default async function PlusPage() {
 
             <div className="border-t border-border/40 pt-6">
               <div className="flex items-baseline gap-1 mb-4">
-                <span className="text-[32px] font-bold text-foreground tracking-tight">R$ 29</span>
+                <span className="text-[32px] font-bold font-numeric text-foreground tracking-tight">R$ 29</span>
                 <span className="text-[14px] text-navy-400">/mês</span>
               </div>
-              <PremiumButton className="w-full" size="lg">
-                Assinar CanetaOS Plus
-              </PremiumButton>
+              <Link href="/checkout/plus_subscription">
+                <PremiumButton className="w-full" size="lg">
+                  Assinar CanetaOS Plus
+                </PremiumButton>
+              </Link>
             </div>
           </PremiumCard>
         )}

@@ -3,7 +3,7 @@ import { AppShell } from "@/components/layout/app-shell"
 import { redirect } from "next/navigation"
 import { PremiumCard } from "@/components/ui/premium-card"
 import { PremiumBadge } from "@/components/ui/premium-badge"
-import { ArrowRight, BookOpen } from "lucide-react"
+import { ArrowRight, BookOpen, FileText } from "lucide-react"
 
 export default async function LearningPage() {
   const supabase = await createClient()
@@ -80,9 +80,14 @@ export default async function LearningPage() {
               {guides.map((guide) => (
                 <a key={guide.id} href={`/app/learning/${guide.slug}`} className="group block">
                   <PremiumCard variant="interactive" padding="lg" className="h-full">
-                    <h3 className="text-[13px] font-medium text-foreground mb-1.5">
-                      {guide.title}
-                    </h3>
+                    <div className="flex items-center gap-2.5 mb-1.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-navy-50 shrink-0">
+                        <FileText className="h-4 w-4 text-navy-600" strokeWidth={1.5} />
+                      </div>
+                      <h3 className="text-[13px] font-medium text-foreground">
+                        {guide.title}
+                      </h3>
+                    </div>
                     <p className="text-[12px] text-navy-500 line-clamp-2 leading-relaxed">
                       {guide.description}
                     </p>

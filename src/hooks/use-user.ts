@@ -30,32 +30,34 @@ export function useUser() {
 
   useEffect(() => {
     async function load() {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
+      try {
+        const supabase = createClient()
+        const { data: { user: authUser }, error: userError } = await supabase.auth.getUser()
+        if (userError) console.error("Falha ao obter usuário:", userError.message)
+        if (!authUser) return
 
-      if (!authUser) {
+        setUser(authUser)
+
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("id, full_name, onboarding_completed, created_at")
+          .eq("id", authUser.id)
+          .single()
+
+        setProfile(prof)
+
+        const { data: prefs } = await supabase
+          .from("user_preferences")
+          .select("medication_name, treatment_duration_category, primary_goal, preferred_content_type")
+          .eq("user_id", authUser.id)
+          .single()
+
+        setPreferences(prefs)
+      } catch (err) {
+        console.error("Falha ao carregar usuário:", err)
+      } finally {
         setLoading(false)
-        return
       }
-
-      setUser(authUser)
-
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("id, full_name, onboarding_completed, created_at")
-        .eq("id", authUser.id)
-        .single()
-
-      setProfile(prof)
-
-      const { data: prefs } = await supabase
-        .from("user_preferences")
-        .select("medication_name, treatment_duration_category, primary_goal, preferred_content_type")
-        .eq("user_id", authUser.id)
-        .single()
-
-      setPreferences(prefs)
-      setLoading(false)
     }
 
     load()

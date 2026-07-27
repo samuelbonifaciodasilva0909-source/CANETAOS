@@ -1,14 +1,24 @@
+import { cookies } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 import { AppShell } from "@/components/layout/app-shell"
-import { redirect } from "next/navigation"
+import { redirect, notFound } from "next/navigation"
 import { PremiumCard } from "@/components/ui/premium-card"
 import { PremiumBadge } from "@/components/ui/premium-badge"
+import { getRecipeVisual } from "@/lib/content/recipe-visual"
+import { RecipePicker } from "@/components/recipe-picker"
+import { getUserEntitlements, hasEntitlement } from "@/lib/entitlements"
 import { ArrowRight, Clock, Beef } from "lucide-react"
 
 export default async function RecipesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
+
+  const isDemo = (await cookies()).get("demo_auth")?.value === "true"
+  if (!isDemo) {
+    const entitlements = await getUserEntitlements(supabase, user.id)
+    if (!hasEntitlement(entitlements, "quick_recipes")) notFound()
+  }
 
   const { data: recipes } = await supabase
     .from("content_items")
@@ -20,22 +30,27 @@ export default async function RecipesPage() {
   return (
     <AppShell>
       <div className="space-y-10">
-        <div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-foreground">
-            Receitas
-          </h1>
-          <p className="mt-1.5 text-[14px] text-navy-500">
-            Receitas nutritivas e práticas para sua rotina.
-          </p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-foreground">
+              Receitas
+            </h1>
+            <p className="mt-1.5 text-[14px] text-navy-500">
+              Receitas nutritivas e práticas para sua rotina.
+            </p>
+          </div>
+          <RecipePicker />
         </div>
 
         {recipes && recipes.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2">
-            {recipes.map((recipe) => (
+            {recipes.map((recipe) => {
+              const visual = getRecipeVisual(recipe.title, (recipe.tags as string[]) || [])
+              return (
               <a key={recipe.id} href={`/app/recipes/${recipe.slug}`} className="group block">
                 <PremiumCard variant="interactive" padding="none" className="overflow-hidden h-full">
-                  <div className="h-36 bg-gradient-to-br from-navy-50 to-warm-100 flex items-center justify-center">
-                    <Beef className="h-8 w-8 text-navy-300" strokeWidth={1} />
+                  <div className={`h-36 bg-gradient-to-br ${visual.gradient} flex items-center justify-center`}>
+                    <visual.icon className={`h-8 w-8 ${visual.iconClass}`} strokeWidth={1} />
                   </div>
                   <div className="p-5">
                     <div className="flex items-center gap-2 mb-2">
@@ -62,7 +77,8 @@ export default async function RecipesPage() {
                   </div>
                 </PremiumCard>
               </a>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <PremiumCard variant="soft" padding="xl" className="text-center max-w-md mx-auto">

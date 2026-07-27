@@ -31,8 +31,8 @@ export function WeightChart({ entries }: WeightChartProps) {
         <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#102a43" stopOpacity={0.12} className="[stop-color:var(--foreground)]" />
-              <stop offset="100%" stopColor="#102a43" stopOpacity={0} className="[stop-color:var(--foreground)]" />
+              <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
@@ -45,6 +45,7 @@ export function WeightChart({ entries }: WeightChartProps) {
           <YAxis
             domain={[min - padding, max + padding]}
             tick={{ fontSize: 10, fill: "#8e99a4" }}
+            tickFormatter={(value: number) => value.toFixed(1)}
             axisLine={false}
             tickLine={false}
           />
@@ -61,11 +62,11 @@ export function WeightChart({ entries }: WeightChartProps) {
           <Area
             type="monotone"
             dataKey="peso"
-            stroke="#102a43"
+            stroke="#8b5cf6"
             strokeWidth={2}
             fill="url(#weightGradient)"
-            dot={{ r: 3, fill: "#102a43", strokeWidth: 0 }}
-            activeDot={{ r: 5, fill: "#102a43", strokeWidth: 2, stroke: "#fff" }}
+            dot={{ r: 3, fill: "#8b5cf6", strokeWidth: 0 }}
+            activeDot={{ r: 5, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }}
           />
         </AreaChart>
       </ResponsiveContainer>

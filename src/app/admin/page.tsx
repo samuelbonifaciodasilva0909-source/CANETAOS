@@ -71,7 +71,7 @@ export default async function AdminPage() {
                   <stat.icon className="h-4 w-4 text-navy-600" strokeWidth={1.5} />
                 </div>
               </div>
-              <p className="text-[24px] font-bold text-navy-900 tracking-tight">
+              <p className="text-[24px] font-bold font-numeric text-navy-900 tracking-tight">
                 {stat.value}
               </p>
               <p className="text-[11px] text-navy-400 mt-0.5">{stat.label}</p>

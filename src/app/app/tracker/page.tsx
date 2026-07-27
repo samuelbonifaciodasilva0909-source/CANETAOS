@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell"
 import { PremiumCard } from "@/components/ui/premium-card"
 import { PremiumBadge } from "@/components/ui/premium-badge"
 import { TrackerForm } from "@/components/tracker-form"
+import { ErrorState } from "@/components/ui/error-state"
 import {
   Plus,
   Scale,
@@ -59,6 +60,7 @@ export default function TrackerPage() {
   const [symptoms, setSymptoms] = useState<SymptomRow[]>([])
   const [userId, setUserId] = useState<string>("")
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingDate, setEditingDate] = useState<string>(new Date().toISOString().split("T")[0])
   const [editingData, setEditingData] = useState<TrackerRow | null>(null)
@@ -69,6 +71,7 @@ export default function TrackerPage() {
   }, [])
 
   async function loadData() {
+    setError(null)
     const isDemo = document.cookie.includes("demo_auth=true")
 
     if (isDemo) {
@@ -83,28 +86,35 @@ export default function TrackerPage() {
       } catch {}
     }
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setUserId(user.id)
+    try {
+      const supabase = createClient()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) console.error("Falha ao obter usuário:", userError.message)
+      if (!user) return
+      setUserId(user.id)
 
-    const { data: trackerData } = await supabase
-      .from("tracker_entries")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("entry_date", { ascending: false })
-      .limit(30)
+      const { data: trackerData } = await supabase
+        .from("tracker_entries")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("entry_date", { ascending: false })
+        .limit(30)
 
-    const { data: symptomData } = await supabase
-      .from("symptom_entries")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("entry_date", { ascending: false })
-      .limit(30)
+      const { data: symptomData } = await supabase
+        .from("symptom_entries")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("entry_date", { ascending: false })
+        .limit(30)
 
-    setEntries(trackerData || [])
-    setSymptoms(symptomData || [])
-    setLoading(false)
+      setEntries(trackerData || [])
+      setSymptoms(symptomData || [])
+    } catch (err) {
+      console.error("Falha ao carregar tracker:", err)
+      setError("Não foi possível carregar seu histórico agora.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   function openNewEntry() {
@@ -136,6 +146,14 @@ export default function TrackerPage() {
   const latestWeight = entries[0]?.weight_kg
   const previousWeight = entries[1]?.weight_kg
   const weightDiff = latestWeight && previousWeight ? latestWeight - previousWeight : null
+
+  if (error) {
+    return (
+      <AppShell>
+        <ErrorState message={error} onRetry={() => { setLoading(true); loadData() }} />
+      </AppShell>
+    )
+  }
 
   return (
     <AppShell>
@@ -200,7 +218,7 @@ export default function TrackerPage() {
                 <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-navy-400">Peso</span>
               </div>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-[22px] font-bold text-foreground tracking-tight">
+                <span className="text-[22px] font-bold font-numeric text-foreground tracking-tight">
                   {latestWeight || "—"}
                 </span>
                 {latestWeight && <span className="text-[12px] text-navy-400">kg</span>}
@@ -211,7 +229,7 @@ export default function TrackerPage() {
                   weightDiff < 0 ? "text-positive" : weightDiff > 0 ? "text-error" : "text-navy-400"
                 )}>
                   {weightDiff < 0 ? <TrendingDown className="h-3 w-3" /> : weightDiff > 0 ? <TrendingUp className="h-3 w-3" /> : null}
-                  <span className="text-[11px] font-medium">
+                  <span className="text-[11px] font-medium font-numeric">
                     {weightDiff > 0 ? "+" : ""}{weightDiff.toFixed(1)} kg
                   </span>
                 </div>
@@ -224,7 +242,7 @@ export default function TrackerPage() {
                 <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-navy-400">Cintura</span>
               </div>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-[22px] font-bold text-foreground tracking-tight">
+                <span className="text-[22px] font-bold font-numeric text-foreground tracking-tight">
                   {entries[0]?.waist_measurement || "—"}
                 </span>
                 {entries[0]?.waist_measurement && <span className="text-[12px] text-navy-400">cm</span>}
@@ -237,7 +255,7 @@ export default function TrackerPage() {
                 <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-navy-400">Proteína</span>
               </div>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-[22px] font-bold text-foreground tracking-tight">
+                <span className="text-[22px] font-bold font-numeric text-foreground tracking-tight">
                   {entries[0]?.protein_intake_g || "—"}
                 </span>
                 {entries[0]?.protein_intake_g && <span className="text-[12px] text-navy-400">g</span>}

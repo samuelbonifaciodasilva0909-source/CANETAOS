@@ -70,17 +70,23 @@ export function GlobalSearch() {
       return
     }
     setLoading(true)
-    const supabase = createClient()
-    const { data } = await supabase
-      .from("content_items")
-      .select("id, title, slug, description, type, is_premium")
-      .eq("is_published", true)
-      .or(`title.ilike.%${q}%,description.ilike.%${q}%`)
-      .order("created_at", { ascending: false })
-      .limit(12)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from("content_items")
+        .select("id, title, slug, description, type, is_premium")
+        .eq("is_published", true)
+        .or(`title.ilike.%${q}%,description.ilike.%${q}%`)
+        .order("created_at", { ascending: false })
+        .limit(12)
 
-    setResults((data as SearchResult[]) || [])
-    setLoading(false)
+      setResults((data as SearchResult[]) || [])
+    } catch (err) {
+      console.error("Falha na busca:", err)
+      setResults([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   // Debounced search

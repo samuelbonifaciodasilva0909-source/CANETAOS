@@ -36,6 +36,8 @@ export type ContentType =
   | "educational"
   | "guide"
   | "update"
+  | "tip"
+  | "desmame"
 
 export type SubscriptionStatus =
   | "trialing"
@@ -47,7 +49,7 @@ export type SubscriptionStatus =
 
 export type UserRole = "user" | "admin" | "professional"
 
-export type PaymentProviderType = "asaas"
+export type PaymentProviderType = "asaas" | "cakto"
 
 /** Funnel product slugs, in purchase order. */
 export type ProductSlug = "frontend" | "recipes_bump" | "desmame" | "plus_subscription"

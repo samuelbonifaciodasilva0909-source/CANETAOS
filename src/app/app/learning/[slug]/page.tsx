@@ -3,6 +3,8 @@ import { AppShell } from "@/components/layout/app-shell"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { PremiumBadge } from "@/components/ui/premium-badge"
+import { trackContentViewServer } from "@/lib/analytics"
+import { FavoriteButton } from "@/components/favorite-button"
 import { ArrowLeft, BookOpen, Clock } from "lucide-react"
 
 interface LearningPageProps {
@@ -12,6 +14,7 @@ interface LearningPageProps {
 export default async function LearningDetailPage({ params }: LearningPageProps) {
   const { slug } = await params
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
   const { data: article } = await supabase
     .from("content_items")
@@ -21,6 +24,18 @@ export default async function LearningDetailPage({ params }: LearningPageProps) 
     .single()
 
   if (!article) notFound()
+  await trackContentViewServer(supabase, article.id, article.type)
+
+  let initialIsFavorite = false
+  if (user) {
+    const { data: fav } = await supabase
+      .from("favorites")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("content_id", article.id)
+      .maybeSingle()
+    initialIsFavorite = !!fav
+  }
 
   const wordCount = article.content?.split(/\s+/).length || 0
   const readTime = Math.max(1, Math.ceil(wordCount / 200))
@@ -43,14 +58,17 @@ export default async function LearningDetailPage({ params }: LearningPageProps) 
         </div>
 
         <div>
-          <div className="flex items-center gap-3 mb-3">
-            <PremiumBadge variant={article.is_premium ? "default" : "outline"}>
-              {article.type === "educational" ? "Artigo" : "Guia"}
-            </PremiumBadge>
-            <div className="flex items-center gap-1.5 text-[12px] text-navy-400">
-              <Clock className="h-3.5 w-3.5" strokeWidth={1.5} />
-              {readTime} min de leitura
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-3">
+              <PremiumBadge variant={article.is_premium ? "default" : "outline"}>
+                {article.type === "educational" ? "Artigo" : "Guia"}
+              </PremiumBadge>
+              <div className="flex items-center gap-1.5 text-[12px] text-navy-400">
+                <Clock className="h-3.5 w-3.5" strokeWidth={1.5} />
+                {readTime} min de leitura
+              </div>
             </div>
+            <FavoriteButton userId={user?.id || null} contentId={article.id} initialIsFavorite={initialIsFavorite} />
           </div>
           <h1 className="text-[24px] font-semibold tracking-[-0.03em] text-foreground">
             {article.title}

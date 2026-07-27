@@ -3,6 +3,8 @@ import { AppShell } from "@/components/layout/app-shell"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { PremiumBadge } from "@/components/ui/premium-badge"
+import { trackContentViewServer } from "@/lib/analytics"
+import { FavoriteButton } from "@/components/favorite-button"
 import { Clock, Beef, ArrowLeft } from "lucide-react"
 
 interface FoodPageProps {
@@ -12,6 +14,7 @@ interface FoodPageProps {
 export default async function FoodDetailPage({ params }: FoodPageProps) {
   const { slug } = await params
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
   const { data: meal } = await supabase
     .from("content_items")
@@ -21,6 +24,18 @@ export default async function FoodDetailPage({ params }: FoodPageProps) {
     .single()
 
   if (!meal) notFound()
+  await trackContentViewServer(supabase, meal.id, "meal_plan")
+
+  let initialIsFavorite = false
+  if (user) {
+    const { data: fav } = await supabase
+      .from("favorites")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("content_id", meal.id)
+      .maybeSingle()
+    initialIsFavorite = !!fav
+  }
 
   return (
     <AppShell>
@@ -38,8 +53,11 @@ export default async function FoodDetailPage({ params }: FoodPageProps) {
         </div>
 
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            {meal.is_premium && <PremiumBadge variant="default">Plus</PremiumBadge>}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div>
+              {meal.is_premium && <PremiumBadge variant="default">Plus</PremiumBadge>}
+            </div>
+            <FavoriteButton userId={user?.id || null} contentId={meal.id} initialIsFavorite={initialIsFavorite} />
           </div>
           <h1 className="text-[24px] font-semibold tracking-[-0.03em] text-foreground">
             {meal.title}

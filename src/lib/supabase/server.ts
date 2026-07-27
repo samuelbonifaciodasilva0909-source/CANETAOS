@@ -418,6 +418,10 @@ function createDemoQuery(table: string, userId: string) {
       _single = true
       return query
     },
+    maybeSingle: () => {
+      _single = true
+      return query
+    },
     then: (resolve: (result: { data: any; error: null; count?: number }) => void) => {
       let filtered = [...tableData]
 

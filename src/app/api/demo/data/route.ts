@@ -58,6 +58,12 @@ export async function GET() {
       created_at: daysAgo(25),
       age_confirmed: true,
     },
+    preferences: {
+      daily_water_goal_ml: 2000,
+      treatment_duration_category: "2_to_6_months",
+      primary_goal: "nao_sei_o_que_comer",
+      medication_name: "ozempic",
+    },
     trackerEntries,
     symptomEntries,
     recipes,
